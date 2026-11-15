@@ -219,6 +219,11 @@ static time_t accum_days_in_year[] = {
 };
 
 #define TIMEZONE_SEC(x)	((x) * 15 * SECS_PER_MIN)
+static int sdfat_minutes_east(const struct sdfat_sb_info *sbi)
+{
+	return sbi->options.time_offset_set ? sbi->options.time_offset : -sys_tz.tz_minuteswest;
+}
+
 /* Convert a FAT time/date pair to a UNIX date (seconds since 1 1 70). */
 void sdfat_time_fat2unix(struct sdfat_sb_info *sbi, sdfat_timespec_t *ts,
 								DATE_TIME_T *tp)
@@ -240,7 +245,7 @@ void sdfat_time_fat2unix(struct sdfat_sb_info *sbi, sdfat_timespec_t *ts,
 
 	/* Treat as local time */
 	if (!sbi->options.tz_utc && !tp->Timezone.valid) {
-		ts->tv_sec += sys_tz.tz_minuteswest * SECS_PER_MIN;
+		ts->tv_sec -= sdfat_minutes_east(sbi) * SECS_PER_MIN;
 		return;
 	}
 
@@ -255,7 +260,6 @@ void sdfat_time_fat2unix(struct sdfat_sb_info *sbi, sdfat_timespec_t *ts,
 		ts->tv_sec += TIMEZONE_SEC(0x80 - tp->Timezone.off);
 }
 
-#define TIMEZONE_CUR_OFFSET()	((sys_tz.tz_minuteswest / (-15)) & 0x7F)
 /* Convert linear UNIX date to a FAT time/date pair. */
 void sdfat_time_unix2fat(struct sdfat_sb_info *sbi, sdfat_timespec_t *ts,
 								DATE_TIME_T *tp)
@@ -269,10 +273,12 @@ void sdfat_time_unix2fat(struct sdfat_sb_info *sbi, sdfat_timespec_t *ts,
 
 	/* Treats as local time with proper time */
 	if (tz_valid || !sbi->options.tz_utc) {
-		second -= sys_tz.tz_minuteswest * SECS_PER_MIN;
+		second += sdfat_minutes_east(sbi) * SECS_PER_MIN;
 		if (tz_valid) {
-			tp->Timezone.valid = 1;
-			tp->Timezone.off = TIMEZONE_CUR_OFFSET();
+			int east = sdfat_minutes_east(sbi);
+
+			tp->Timezone.valid = east % 15 == 0 && east >= -960 && east <= 945;
+			tp->Timezone.off = tp->Timezone.valid ? ((east / 15) & 0x7F) : 0;
 		}
 	}
 

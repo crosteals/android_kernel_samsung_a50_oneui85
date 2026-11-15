@@ -4434,6 +4434,8 @@ static int __sdfat_show_options(struct seq_file *m, struct super_block *sb)
 	if (sbi->fsi.vol_type != EXFAT)
 		seq_puts(m, ",shortname=winnt");
 	seq_printf(m, ",namecase=%u", opts->casesensitive);
+	if (opts->time_offset_set)
+		seq_printf(m, ",time_offset=%d", opts->time_offset);
 	if (opts->tz_utc)
 		seq_puts(m, ",tz=UTC");
 	if (opts->improved_allocation & SDFAT_ALLOC_DELAY)
@@ -4629,6 +4631,7 @@ enum {
 	Opt_utf8,
 	Opt_namecase,
 	Opt_tz_utc,
+	Opt_time_offset,
 	Opt_adj_hidsect,
 	Opt_delay,
 	Opt_smart,
@@ -4658,6 +4661,7 @@ static const match_table_t sdfat_tokens = {
 	{Opt_utf8, "utf8"},
 	{Opt_namecase, "namecase=%u"},
 	{Opt_tz_utc, "tz=UTC"},
+	{Opt_time_offset, "time_offset=%d"},
 	{Opt_adj_hidsect, "adj_hid"},
 	{Opt_delay, "delay"},
 	{Opt_smart, "smart"},
@@ -4693,6 +4697,8 @@ static int parse_options(struct super_block *sb, char *options, int silent,
 	opts->utf8 = 0;
 	opts->adj_hidsect = 0;
 	opts->tz_utc = 0;
+	opts->time_offset_set = false;
+	opts->time_offset = 0;
 	opts->improved_allocation = 0;
 	opts->amap_opt.pack_ratio = 0;	// Default packing
 	opts->amap_opt.sect_per_au = 0;
@@ -4761,7 +4767,15 @@ static int parse_options(struct super_block *sb, char *options, int silent,
 		case Opt_adj_hidsect:
 			opts->adj_hidsect = 1;
 			break;
+		case Opt_time_offset:
+			if (match_int(&args[0], &option) || option < -1440 || option > 1440)
+				return 0;
+			opts->time_offset_set = true;
+			opts->time_offset = option;
+			opts->tz_utc = 0;
+			break;
 		case Opt_tz_utc:
+			opts->time_offset_set = false;
 			opts->tz_utc = 1;
 			break;
 		case Opt_symlink:
